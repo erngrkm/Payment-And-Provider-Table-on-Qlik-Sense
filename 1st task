@@ -1,0 +1,237 @@
+#providers tablosu
+providers:
+SELECT
+BASE.provider_id,
+BASE.year as year,
+BASE.month as month,
+BASE.yearmonth,
+BASE.provider_name as provider_name,
+BASE.city_name as name,
+BASE.provider_category_name as category_name,
+BASE.product_name as product_name,
+BASE.starts_on as starts_on,
+BASE.ends_on as ends_on,
+BASE.catogr as catogr,
+BASE.customer_name as customer_name,
+BASE.customer_id as customer_id,
+BASE.category_id as category_id,
+sum(vl.gallery_view) as gallery_view,
+sum(vl.profile_view) as profile_view,
+sum(lp.lead_count) as lead_count ,
+sum(lp.call_lead_count) as call_lead_count ,
+sum(lp.infoRequest_count) as infoRequest_count,
+sum(lp.plusLead_count) as  plusLead_count ,
+sum(lp.assisted_lead_count) as assisted_lead_count ,
+sum(lp.result_tagged_lead_count) as result_tagged_lead_count,
+sum(lp.responded_in_a_day_lead_count) as responded_in_a_day_lead_count ,
+count(distinct cp.couple_id) as distincted_couple_count,
+BASE.actual_price as actual_price,
+BASE.price as price,
+count(BASE.date) as day_count
+
+FROM     (SELECT
+                   P.id as provider_id,
+                  date_given.date,
+                   date_given.year,
+                   date_given.month,
+                   date_given.yearmonth,
+                   P.name as provider_name,
+                   L.name as city_name,
+                   PC.name as provider_category_name,
+                   PR.name as product_name,
+                   PPP.starts_on,
+                   PPP.ends_on,
+                   grp.category_group as catogr,
+                   cst.title as customer_name,
+                   cst.id as customer_id,
+                   grp.id as category_id,
+                   PPP.actual_price,
+                   PPP.price
+
+               FROM
+                   products AS PR
+                       JOIN product_feature AS PF ON (PR.id = PF.product_id)
+                       JOIN product_price AS PP ON (PR.id = PP.product_id)
+                       JOIN provider_product_price AS PPP ON (PP.id = PPP.`product_price_id`)
+                       JOIN providers AS P ON (P.id = PPP.provider_id)
+                       JOIN customers as cst on (P.customer_id=cst.id)
+                       JOIN city AS L ON (P.city_id = L.id)
+                       JOIN provider_category AS PC ON (P.category_id = PC.id)
+                       JOIN (select pc.id,pc.name,pc.category_type,
+                            case when pc.category_type = 'venue' then 'Venue' else
+                          case when c.type is not null then 'Big 5' else 'Others' end end as category_group
+                             from provider_category as pc
+                            left join category_city_settings as c on c.provider_category_id = pc.id
+                         and c.type = 'primary_service_categories')
+                       AS grp on PC.id=grp.id
+                       JOIN (select gen_date  as date, year(gen_date) as year, month(gen_date) as month,concat(year(gen_date),LPAD(month(gen_date), 2, '0')) as yearmonth from
+                 (select adddate('1980-01-01',t4*10000 + t3*1000 + t2*100 + t1*10 + t0) gen_date from
+                 (select 0 t0 union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+                 (select 0 t1 union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+                 (select 0 t2 union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+                 (select 0 t3 union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3,
+                 (select 0 t4 union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t4) v
+                 Where gen_date between '2022-01-01' and curdate()) date_given
+                 on  date_given.date   between PPP.starts_on and curdate()
+               WHERE
+                   PF.deleted_at IS NULL AND
+                   PR.deleted_at IS NULL AND
+                   PPP.deleted_at IS NULL AND
+                       PPP.status = 1 AND
+                   (CURDATE() BETWEEN PPP.starts_on AND PPP.ends_on) AND
+                   PF.listing_type_id IS NOT NULL
+                 and PR.is_freemium = 0 and PPP.is_trial = 0) BASE
+       LEFT JOIN(select
+       l.provider_id,
+       date(l.created_at) as date,
+       count(l.id) as lead_count,
+       sum(case when first_lead_type = 'call' then 1 else 0 end) as call_lead_count,
+       sum(case when first_lead_type = 'infoRequest' then 1 else 0 end) as infoRequest_count,
+       sum(case when first_lead_type = 'plusLead' then 1 else 0 end) as plusLead_count,
+       sum(case when first_lead_type = 'assistedLead' then 1 else 0 end)  as assisted_lead_count,
+       sum(case when status = 'new' or status is null then 0 else 1 end) result_tagged_lead_count,
+       sum(case when TIMESTAMPDIFF(SECOND,l.created_at,l.first_response_at)<=86400 then 1 else 0 end) as responded_in_a_day_lead_count
+FROM leads as l
+inner join (
+    SELECT
+    P.id as provider_id,
+    PPP.starts_on
+   FROM products AS PR
+   JOIN product_feature AS PF ON (PR.id = PF.product_id)
+   JOIN product_price AS PP ON (PR.id = PP.product_id)
+   JOIN provider_product_price AS PPP ON (PP.id = PPP.`product_price_id`)
+   JOIN providers AS P ON (P.id = PPP.provider_id)
+   WHERE
+   PF.deleted_at IS NULL AND
+   PR.deleted_at IS NULL AND
+   PPP.deleted_at IS NULL AND
+   PPP.status = 1 AND
+   (CURDATE() BETWEEN PPP.starts_on AND PPP.ends_on) AND
+   PF.listing_type_id IS NOT NULL
+    and PR.is_freemium = 0 and PPP.is_trial = 0
+) as p on l.provider_id = p.provider_id and l.created_at >= p.starts_on and l.created_at < curdate()
+group by l.provider_id,date(l.created_at)) lp ON lp.date=BASE.date and lp.provider_id = BASE.provider_id
+LEFT JOIN visit_log as vl on vl.provider_id = BASE.provider_id and vl.visit_date = BASE.date
+LEFT JOIN couple_provider as cp on  cp.provider_id=BASE.provider_id
+                                       and  BASE.date= coalesce(cp.organization_date,date(cp.created_at))
+group by BASE.provider_id, BASE.year, BASE.month, BASE.yearmonth;
+
+#payment tablosu
+payment:
+select   
+        payment.id  as payment_id,
+        cp.customer_id as customer_id,
+        cp.provider_id as provider_id,
+        status_id  as payment_status_id,
+        payment_due_date,
+        payment_date,
+        amount,
+        concat(year(payment_due_date),LPAD(month(payment_due_date), 2, '0')) as yearmonth,
+
+        case
+            when payment_due_date >= curdate() then null
+            else
+                (case
+                     when status_id = 'cancelled' then null
+                     else datediff(payment_date, payment_due_date) end) end as payment_delay
+ FROM customer_payments as cp
+           INNER JOIN payments as payment on payment.id = cp.payment_id
+          INNER JOIN (SELECT P.id as provider_id,
+                             PPP.starts_on,
+                             P.customer_id,
+                             P.deleted_at
+                      FROM products AS PR
+                               JOIN product_feature AS PF ON (PR.id = PF.product_id)
+                               JOIN product_price AS PP ON (PR.id = PP.product_id)
+                               JOIN provider_product_price AS PPP ON (PP.id = PPP.`product_price_id`)
+                               JOIN providers AS P ON (P.id = PPP.provider_id)
+                      WHERE PF.deleted_at IS NULL
+                        AND PR.deleted_at IS NULL
+                        AND PPP.deleted_at IS NULL
+                        AND PPP.status = 1
+                        AND (CURDATE() BETWEEN PPP.starts_on AND PPP.ends_on)
+                        AND PF.listing_type_id IS NOT NULL
+                        and PR.is_freemium = 0
+                        and PPP.is_trial = 0) as provider on provider.provider_id = cp.provider_id and  date_add(provider.starts_on,interval -10 day ) <= payment.payment_due_date 
+         
+          INNER JOIN customer_agreements as ca on ca.id = cp.customer_agreement_id
+ WHERE provider.customer_id NOT IN (24126)
+   and cp.deleted_at is null
+   and provider.deleted_at is null
+   and payment.deleted_at is null
+   and ca.deleted_at is null
+   and payment.payment_due_date between '2022-01-01' and CURDATE()
+   
+group by provider_id,payment_due_date;
+
+#provider bazında payment tablosunun max ve min değerleri
+select  case when status_id='success' then max(payment_due_date) end as max_payment_due ,
+        case when status_id='success' then max(payment_due_date) end as max_payment, 
+        payment.id  as payment_id,
+        cp.customer_id as customer_id,
+        cp.provider_id as provider_id,
+        status_id  as payment_status_id,
+        payment_due_date,
+        payment_date,
+        amount,
+        concat(year(payment_due_date),LPAD(month(payment_due_date), 2, '0')) as yearmonth,
+
+        case
+            when payment_due_date >= curdate() then null
+            else
+                (case
+                     when status_id = 'cancelled' then null
+                     else datediff(payment_date, payment_due_date) end) end as payment_delay
+ FROM customer_payments as cp
+           INNER JOIN payments as payment on payment.id = cp.payment_id
+          INNER JOIN (SELECT P.id as provider_id,
+                             PPP.starts_on,
+                             P.customer_id,
+                             P.deleted_at
+                      FROM products AS PR
+                               JOIN product_feature AS PF ON (PR.id = PF.product_id)
+                               JOIN product_price AS PP ON (PR.id = PP.product_id)
+                               JOIN provider_product_price AS PPP ON (PP.id = PPP.`product_price_id`)
+                               JOIN providers AS P ON (P.id = PPP.provider_id)
+                      WHERE PF.deleted_at IS NULL
+                        AND PR.deleted_at IS NULL
+                        AND PPP.deleted_at IS NULL
+                        AND PPP.status = 1
+                        AND (CURDATE() BETWEEN PPP.starts_on AND PPP.ends_on)
+                        AND PF.listing_type_id IS NOT NULL
+                        and PR.is_freemium = 0
+                        and PPP.is_trial = 0) as provider on provider.provider_id = cp.provider_id and  date_add(provider.starts_on,interval -10 day ) <= payment.payment_due_date 
+         
+          INNER JOIN customer_agreements as ca on ca.id = cp.customer_agreement_id
+ WHERE provider.customer_id NOT IN (24126)
+   and cp.deleted_at is null
+   and provider.deleted_at is null
+   and payment.deleted_at is null
+   and ca.deleted_at is null
+   and payment.payment_due_date between '2022-01-01' and CURDATE()
+   
+group by provider_id;
+
+LIB CONNECT TO 'DugunProd';
+Set DateFormat='YYYY-MM-DD';
+let v_load_date = Date(Today() - 5,'YYYY-MM-DD');
+load   max_payment_due,
+       max_payment,
+       provider_id
+
+
+ ;
+LIB CONNECT TO 'DugunProd';
+Set DateFormat='YYYY-MM-DD';
+let v_load_date = Date(Today() - 5,'YYYY-MM-DD');
+load   max_payment_due,
+       max_payment,
+       provider_id
+
+
+ ;
+
+
+
+
+
